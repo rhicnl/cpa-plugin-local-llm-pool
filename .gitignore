@@ -1,0 +1,19 @@
+# Secrets. Never commit a real environment file; only the sample templates.
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+
+# Build output.
+bin/
+dist/
+
+# Built plugin libraries and the cgo header.
+*.so
+*.h
+*.dylib
+*.dll
+
+# Scratch space.
+.tmp/

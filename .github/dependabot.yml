@@ -1,0 +1,21 @@
+version: 2
+
+updates:
+  # Go module dependencies. The plugin depends only on the CLIProxyAPI SDK and
+  # yaml.v3, so this should stay quiet.
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: deps
+
+  # Workflow actions, which are pinned to major versions in .github/workflows.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: ci

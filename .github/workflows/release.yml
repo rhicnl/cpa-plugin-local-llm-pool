@@ -1,0 +1,241 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  # workflow_dispatch is a dry run: it builds and packages every platform and
+  # uploads the archives as workflow artifacts, but creates no release.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PLUGIN_ID: local-llm-pool
+
+jobs:
+  prepare:
+    name: Resolve version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      release: ${{ steps.resolve.outputs.release }}
+    steps:
+      - name: Resolve version from the tag
+        id: resolve
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "${REF_TYPE}" = "tag" ]; then
+            # The store requires assets named with the tag minus its leading v.
+            version="${REF_NAME#v}"
+            release=true
+          else
+            version="0.0.0-dryrun"
+            release=false
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "release=${release}" >> "${GITHUB_OUTPUT}"
+          echo "version=${version} release=${release}"
+
+  build:
+    name: ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Built natively on each platform. cgo c-shared cannot be
+          # cross-compiled without a full target toolchain, so every entry
+          # needs a runner of its own architecture.
+          - goos: linux
+            goarch: amd64
+            runner: ubuntu-24.04
+          - goos: linux
+            goarch: arm64
+            runner: ubuntu-24.04-arm
+          - goos: darwin
+            goarch: arm64
+            runner: macos-15
+          - goos: darwin
+            goarch: amd64
+            runner: macos-15-intel
+          - goos: windows
+            goarch: amd64
+            runner: windows-2025
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # The Windows image ships MSYS2 but does not always put its mingw-w64
+      # gcc on PATH, and cgo needs a C compiler.
+      - name: Ensure a C toolchain
+        if: matrix.goos == 'windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command gcc -ErrorAction SilentlyContinue)) {
+            Write-Host "gcc is not on PATH, adding C:\msys64\mingw64\bin"
+            "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          }
+
+      - name: Show the C toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          cc --version 2>/dev/null || gcc --version
+
+      # A wrong runner label would silently produce an archive named for one
+      # platform holding a library for another, so fail loudly instead.
+      - name: Confirm the runner is native for this target
+        shell: bash
+        env:
+          WANT_GOOS: ${{ matrix.goos }}
+          WANT_GOARCH: ${{ matrix.goarch }}
+        run: |
+          set -euo pipefail
+          got_goos="$(go env GOOS)"
+          got_goarch="$(go env GOARCH)"
+          echo "runner reports ${got_goos}/${got_goarch}, matrix wants ${WANT_GOOS}/${WANT_GOARCH}"
+          if [ "${got_goos}" != "${WANT_GOOS}" ] || [ "${got_goarch}" != "${WANT_GOARCH}" ]; then
+            echo "runner ${{ matrix.runner }} is not native for ${WANT_GOOS}/${WANT_GOARCH}" >&2
+            exit 1
+          fi
+
+      - name: Build the plugin
+        shell: bash
+        env:
+          CGO_ENABLED: "1"
+          VERSION: ${{ needs.prepare.outputs.version }}
+          GOOS_TARGET: ${{ matrix.goos }}
+        run: |
+          set -euo pipefail
+          case "${GOOS_TARGET}" in
+            windows) ext=".dll" ;;
+            darwin)  ext=".dylib" ;;
+            *)       ext=".so" ;;
+          esac
+          mkdir -p bin
+          go build -buildmode=c-shared \
+            -ldflags "-X main.pluginVersion=${VERSION}" \
+            -o "bin/${PLUGIN_ID}${ext}" .
+          # The cgo header must never reach the archive.
+          rm -f "bin/${PLUGIN_ID}.h"
+          ls -l bin
+          echo "LIB_PATH=bin/${PLUGIN_ID}${ext}" >> "${GITHUB_ENV}"
+
+      - name: Package the archive
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          go run ./tools/pkgzip pack \
+            -id "${PLUGIN_ID}" -version "${VERSION}" \
+            -goos "${{ matrix.goos }}" -goarch "${{ matrix.goarch }}" \
+            -lib "${LIB_PATH}" -out dist
+
+      - name: Verify the archive layout
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          go run ./tools/pkgzip checksums -dir dist
+          go run ./tools/pkgzip verify \
+            -dir dist -id "${PLUGIN_ID}" -version "${VERSION}" \
+            -goos "${{ matrix.goos }}" -goarch "${{ matrix.goarch }}"
+
+      - name: Upload the archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: archive-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  bundle:
+    name: Collect archives and checksums
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download every platform archive
+        uses: actions/download-artifact@v8
+        with:
+          pattern: archive-*
+          merge-multiple: true
+          path: dist
+
+      - name: Write checksums.txt and verify every archive
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          ls -l dist
+          go run ./tools/pkgzip checksums -dir dist
+          go run ./tools/pkgzip verify -dir dist -id "${PLUGIN_ID}" -version "${VERSION}"
+          # Every platform in the matrix must be present before a release.
+          count="$(find dist -name '*.zip' | wc -l)"
+          if [ "${count}" -ne 5 ]; then
+            echo "expected 5 archives, found ${count}" >&2
+            exit 1
+          fi
+
+      - name: Upload the release bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-bundle
+          path: |
+            dist/*.zip
+            dist/checksums.txt
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish the GitHub release
+    needs: [prepare, bundle]
+    if: needs.prepare.outputs.release == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download the release bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: release-bundle
+          path: dist
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          ls -l dist
+          gh release create "${TAG}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "${TAG}" \
+            --generate-notes \
+            dist/*.zip dist/checksums.txt

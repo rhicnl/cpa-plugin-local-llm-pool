@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The job id and name are both "ci" so the reported check run is named exactly
+  # "ci". The branch ruleset requires a status check with that name, so do not
+  # rename this job or add a `name:` that differs from the id.
+  ci:
+    name: ci
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "${unformatted}" ]; then
+            echo "These files are not gofmt clean:" >&2
+            echo "${unformatted}" >&2
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test -race -count=1 ./...
+
+      # The plugin is a cgo c-shared library, so this is the step that proves
+      # the ABI shim still links.
+      - name: make build
+        run: make build
+
+      - name: Package and verify the release archive layout
+        run: |
+          make package
+          make verify-package
