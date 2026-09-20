@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/rhicnl/cli-proxy-api-plugin-local-llm-pool/internal/tracker"
+	"github.com/rhicnl/cpa-plugin-local-llm-pool/internal/tracker"
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginabi"
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginapi"
 )
