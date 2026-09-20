@@ -16,7 +16,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/rhicnl/cli-proxy-api-plugin-local-llm-pool/internal/pkgzip"
+	"github.com/rhicnl/cpa-plugin-local-llm-pool/internal/pkgzip"
 )
 
 func main() {

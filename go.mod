@@ -1,4 +1,4 @@
-module github.com/rhicnl/cli-proxy-api-plugin-local-llm-pool
+module github.com/rhicnl/cpa-plugin-local-llm-pool
 
 go 1.26.0
 

@@ -5,7 +5,7 @@
 **Please do not open a public issue for a security vulnerability.**
 
 Report it privately through GitHub's private vulnerability reporting: go to the
-[Security tab](https://github.com/rhicnl/cli-proxy-api-plugin-local-llm-pool/security) of
+[Security tab](https://github.com/rhicnl/cpa-plugin-local-llm-pool/security) of
 this repository and choose **Report a vulnerability**. That opens a private advisory visible
 only to you and the maintainer.
 

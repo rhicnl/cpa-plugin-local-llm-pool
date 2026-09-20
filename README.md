@@ -667,7 +667,7 @@ and the PR checklist.
 
 A CLIProxyAPI plugin is a native library loaded into the proxy process, with no sandbox, so
 install only plugins you trust. Report vulnerabilities privately through this repository's
-[Security tab](https://github.com/rhicnl/cli-proxy-api-plugin-local-llm-pool/security), not
+[Security tab](https://github.com/rhicnl/cpa-plugin-local-llm-pool/security), not
 as a public issue. See [SECURITY.md](SECURITY.md).
 
 ## License
