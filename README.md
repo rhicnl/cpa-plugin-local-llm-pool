@@ -43,8 +43,12 @@ pick, expires after `pending_ttl_ms`.
 
 ## Requirements
 
-- CLIProxyAPI **v7.3.9 or newer**, built with **cgo enabled**. The host loads plugins with
-  `dlopen`; a `CGO_ENABLED=0` build cannot load any plugin.
+- CLIProxyAPI **v7.3.7 or newer** (tested against v7.3.9), built with **cgo enabled**. The host
+  loads plugins with `dlopen`; a `CGO_ENABLED=0` build cannot load any plugin. Older hosts lack
+  the request completion callback (added in v7.2.103) and cross-priority scheduler candidates
+  (added in v7.3.7); the plugin refuses to register on a host that cannot release slots.
+- The official Docker image `eceasy/cli-proxy-api` works, including with a read-only root
+  filesystem and all capabilities dropped. The plugins directory must not be mounted `noexec`.
 - Linux, macOS or FreeBSD for the `.so`/`.dylib` loader, or Windows for `.dll`.
 - One or more OpenAI-compatible model servers.
 
