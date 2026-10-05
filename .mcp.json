@@ -1,0 +1,30 @@
+{
+  "mcpServers": {
+    "jcodemunch": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "jcodemunch-mcp[watch] @ git+https://github.com/jgravelle/jcodemunch-mcp.git",
+        "jcodemunch-mcp",
+        "serve",
+        "--watcher",
+        "--watcher-path",
+        ".",
+        "--watcher-extra-ignore",
+        "node_modules/**"
+      ],
+      "env": {}
+    },
+    "jdocmunch": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "jdocmunch-mcp @ git+https://github.com/jgravelle/jdocmunch-mcp.git",
+        "jdocmunch-mcp"
+      ],
+      "env": {}
+    }
+  }
+}
