@@ -1,0 +1,21 @@
+[mcp_servers.jcodemunch]
+command = "uvx"
+args = [
+  "--from",
+  "jcodemunch-mcp[watch] @ git+https://github.com/jgravelle/jcodemunch-mcp.git",
+  "jcodemunch-mcp",
+  "serve",
+  "--watcher",
+  "--watcher-path",
+  ".",
+  "--watcher-extra-ignore",
+  "node_modules/**",
+]
+
+[mcp_servers.jdocmunch]
+command = "uvx"
+args = [
+  "--from",
+  "jdocmunch-mcp @ git+https://github.com/jgravelle/jdocmunch-mcp.git",
+  "jdocmunch-mcp",
+]
